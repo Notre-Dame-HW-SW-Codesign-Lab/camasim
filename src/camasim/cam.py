@@ -7,10 +7,10 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional, Callable
 
-from cam.config import CAMConfig
-from cam.evacam import EVACAMConfig
-from cam._merge import horizontal_and, vertical_union
-from cam._mapping import default_write_mapping, default_query_mapping
+from camasim.config import CAMConfig
+from camasim.evacam import EVACAMConfig
+from camasim._merge import horizontal_and, vertical_union
+from camasim._mapping import default_write_mapping, default_query_mapping
 
 
 @dataclass

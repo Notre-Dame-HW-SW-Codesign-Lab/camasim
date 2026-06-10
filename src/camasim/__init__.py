@@ -1,4 +1,4 @@
-from cam.cam import CAMASim
-from cam.config import CAMConfig
+from camasim.cam import CAMASim
+from camasim.config import CAMConfig
 
 __all__ = ["CAMASim", "CAMConfig"]
