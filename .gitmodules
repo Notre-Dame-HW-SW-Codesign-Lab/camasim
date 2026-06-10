@@ -1,3 +1,0 @@
-[submodule "CAMASim/performance/module/EVACAM"]
-	path = CAMASim/performance/module/EVACAM
-	url = https://github.com/tospe/EvaCAM
