@@ -1,18 +1,15 @@
 """
 EvaCAM-backed cost/match model for CAMASim.
 
-This wraps the compiled ``evacam_py`` pybind11 module (built from the
-``evacam/`` C++ project) so CAMASim can use EvaCAM's circuit-accurate match
-evaluation. For each row/query pair EvaCAM returns whether the row is a hit
-plus the search latency and dynamic energy from its circuit model.
+This wraps the compiled ``evacam_py`` pybind11 module (the ``evacam-py``
+dependency, built from the EvaCAM C++ project) so CAMASim can use EvaCAM's
+circuit-accurate match evaluation. For each row/query pair EvaCAM returns
+whether the row is a hit plus the search latency and dynamic energy from its
+circuit model.
 
-Build the module first (from the ``evacam/`` directory)::
-
-    make evacam_py$(python3-config --extension-suffix) \
-        CPP_FLAGS="... -Icompat -I<yaml-cpp>/include/yaml-cpp ..." \
-        LD_LIBS="-lyaml-cpp -lomp -undefined dynamic_lookup"
-
-See ``cam/evacam.py`` history / the repo notes for the full macOS flags.
+The default match config is shipped with the ``evacam-py`` distribution (the
+``evacam_assets`` package), so no EvaCAM source checkout is needed; a local
+``evacam/`` source tree is used as a development fallback.
 """
 
 import contextlib
@@ -23,11 +20,35 @@ from typing import Optional
 
 import numpy as np
 
-# Default EvaCAM match config shipped with the evacam/ project.
-# This file lives at <repo>/src/camasim/evacam.py, so the repo root is parents[2].
+# Local EvaCAM source tree (development fallback). This file lives at
+# <repo>/src/camasim/evacam.py, so the repo root is parents[2].
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _EVACAM_DIR = _REPO_ROOT / "evacam"
-_DEFAULT_CONFIG = _EVACAM_DIR / "config" / "2FeFET_TCAM" / "2FeFET_TCAM_match_system_config.yaml"
+_SOURCE_CONFIG = _EVACAM_DIR / "config" / "2FeFET_TCAM" / "2FeFET_TCAM_match_system_config.yaml"
+
+
+def _default_config_and_root():
+    """Return ``(config_path, chdir_root)`` for the default match config.
+
+    Prefers the config bundled in the installed ``evacam_assets`` package
+    (so no EvaCAM source checkout is needed); falls back to the local
+    ``evacam/`` source tree for development. EvaCAM resolves a config's
+    ``cell_file`` relative to the working directory, so ``chdir_root`` is the
+    directory those relative paths are anchored to.
+    """
+    try:
+        import evacam_assets
+
+        if evacam_assets.DEFAULT_MATCH_CONFIG.exists():
+            return evacam_assets.DEFAULT_MATCH_CONFIG, evacam_assets.CONFIG_ROOT
+    except ImportError:
+        pass
+    return _SOURCE_CONFIG, _EVACAM_DIR
+
+
+# Resolved once at import; _DEFAULT_CONFIG is part of the public-ish surface
+# (tests check whether it exists to decide whether to run EvaCAM-backed cases).
+_DEFAULT_CONFIG, _DEFAULT_CONFIG_ROOT = _default_config_and_root()
 
 
 def _load_evacam_module():
@@ -75,12 +96,18 @@ class EVACAMConfig:
 
     def __init__(self, config_path: Optional[str] = None):
         evacam_py = _load_evacam_module()
-        self.config_path = str(config_path or _DEFAULT_CONFIG)
-        # EvaCAM resolves its cell_file relative to the evacam/ project dir, so
-        # run the load from there when that source tree is available (dev
-        # checkout). With an installed-only package, supply a config_path whose
-        # cell_file resolves from the current working directory.
-        with _chdir(_EVACAM_DIR) if _EVACAM_DIR.is_dir() else contextlib.nullcontext():
+        if config_path is None:
+            self.config_path = str(_DEFAULT_CONFIG)
+            # Anchor the config's relative cell_file path to the bundled (or
+            # source) config root.
+            root = _DEFAULT_CONFIG_ROOT
+        else:
+            # Caller-supplied config: its cell_file is resolved from the
+            # current working directory.
+            self.config_path = str(config_path)
+            root = None
+        ctx = _chdir(root) if root is not None and root.is_dir() else contextlib.nullcontext()
+        with ctx:
             self._matcher = evacam_py.EvaCAMMatch(self.config_path)
         self.word_width = self._matcher.word_width()
 
