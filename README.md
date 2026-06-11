@@ -33,7 +33,7 @@ result = cam.query(queries)           # QueryResult(indices, latency, energy)
 print(result.indices, result.latency, result.energy)
 ```
 
-See `test_evacam_match.py` for a runnable end-to-end example.
+See `tests/` for runnable end-to-end examples.
 
 ## Layout
 
