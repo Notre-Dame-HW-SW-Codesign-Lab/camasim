@@ -9,8 +9,17 @@ from typing import Optional, Callable
 
 from camasim.config import CAMConfig
 from camasim.evacam import EVACAMConfig
-from camasim._merge import horizontal_and, vertical_union
-from camasim._mapping import default_write_mapping, default_query_mapping
+from camasim._merge import HORIZONTAL_MERGES, VERTICAL_MERGES
+from camasim._mapping import MAPPINGS
+
+
+def _resolve(value, registry):
+    """A registered name -> its strategy; a callable/tuple -> used as-is."""
+    if isinstance(value, str):
+        if value not in registry:
+            raise ValueError(f"Unknown strategy {value!r}; options: {sorted(registry)}")
+        return registry[value]
+    return value
 
 
 @dataclass
@@ -42,11 +51,11 @@ class CAMASim:
         self.evacam = EVACAMConfig()
         self.col_splits = 1
 
-        # Pluggable strategies
-        self.horizontal_merge: Callable = horizontal_and
-        self.vertical_merge: Callable = vertical_union
-        self.write_mapping: Callable = default_write_mapping
-        self.query_mapping: Callable = default_query_mapping
+        # Strategies from the config: each accepts a registered name or a
+        # callable passed directly (a (write, query) pair for mapping).
+        self.horizontal_merge: Callable = _resolve(config.horizontal_merge, HORIZONTAL_MERGES)
+        self.vertical_merge: Callable = _resolve(config.vertical_merge, VERTICAL_MERGES)
+        self.write_mapping, self.query_mapping = _resolve(config.mapping, MAPPINGS)
 
     # TODO: I need to have quantization
     # TODO: I need to validate the input sizes with the data we need good errors

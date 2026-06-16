@@ -17,3 +17,8 @@ def horizontal_and(col_results: list[tuple[bool, float, float]]) -> tuple[bool, 
 def vertical_union(per_row_matches: list[list[int]]) -> list[int]:
     """Collect all matched row indices."""
     return [idx for matches in per_row_matches for idx in matches]
+
+
+# Named merge strategies, selected via CAMConfig.
+HORIZONTAL_MERGES = {"and": horizontal_and}
+VERTICAL_MERGES = {"union": vertical_union}
