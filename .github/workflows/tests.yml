@@ -23,5 +23,5 @@ jobs:
       - name: Sync (builds camasim and the evacam_py dependency from git)
         run: uv sync
 
-      - name: Run tests
-        run: uv run pytest -q
+      - name: Run tests in parallel
+        run: uv run pytest
