@@ -4,6 +4,10 @@ Skipped automatically when the compiled evacam_py extension is unavailable.
 """
 
 import numpy as np
+import pytest
+
+from camasim import CAMASim, CAMConfig
+from camasim._mapping import default_query_mapping, default_write_mapping
 
 
 def _expected_matches(data, query):
@@ -53,3 +57,25 @@ def test_query_flattens_multiple_queries(written_cam):
     expected = _expected_matches(data, data[2]) + _expected_matches(data, data[5])
     assert sorted(result.indices) == sorted(expected)
     assert 2 in result.indices and 5 in result.indices
+
+
+def test_custom_mapping_callable_is_used(word_width):
+    """A (write, query) callable pair passed via config is used directly."""
+    used = []
+
+    def my_query_mapping(queries, col_splits, subarray_cols):
+        used.append(True)
+        return default_query_mapping(queries, col_splits, subarray_cols)
+
+    cam = CAMASim(
+        CAMConfig(subarray_cols=word_width, mapping=(default_write_mapping, my_query_mapping))
+    )
+    assert cam.query_mapping is my_query_mapping
+    cam.write(np.zeros((2, word_width)))
+    cam.query(np.zeros((1, word_width)))
+    assert used  # the custom mapping actually ran
+
+
+def test_unknown_mapping_name_raises(word_width):
+    with pytest.raises(ValueError, match="Unknown strategy"):
+        CAMASim(CAMConfig(subarray_cols=word_width, mapping="nope"))
