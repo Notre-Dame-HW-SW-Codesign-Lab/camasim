@@ -24,8 +24,9 @@ def _resolve(value, registry):
 
 @dataclass
 class WriteResult:
-    latency: Optional[float]  # ns
+    latency: Optional[float]  # s
     energy: Optional[float]   # J
+    area: Optional[float]     # m^2
 
 
 @dataclass
@@ -72,7 +73,7 @@ class CAMASim:
             self.subarray_rows, self.col_splits, self.subarray_cols
         )
 
-        return WriteResult(latency=latency, energy=energy)
+        return WriteResult(latency=latency, energy=energy, area=self.evacam.area)
     
     # TODO: I need to add selective matching both on columns and rows
     # TODO: I need to have quantization

@@ -18,9 +18,10 @@ def _expected_matches(data, query):
 def test_write_returns_result(written_cam):
     cam, data = written_cam
     result = cam.write(data)
-    # Write is an EvaCAM pass-through (search-path model only).
-    assert result.latency == 0.0
-    assert result.energy == 0.0
+    # Write cost and array area come from EvaCAM's full run model.
+    assert result.latency > 0
+    assert result.energy > 0
+    assert result.area > 0
 
 
 def test_query_finds_each_stored_row(written_cam):
