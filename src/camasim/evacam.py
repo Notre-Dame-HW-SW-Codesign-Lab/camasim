@@ -95,7 +95,7 @@ class EVACAMConfig:
     """
 
     def __init__(self, config_path: Optional[str] = None):
-        evacam_py = _load_evacam_module()
+        self._evacam_py = _load_evacam_module()
         if config_path is None:
             self.config_path = str(_DEFAULT_CONFIG)
             # Anchor the config's relative cell_file path to the bundled (or
@@ -106,10 +106,42 @@ class EVACAMConfig:
             # current working directory.
             self.config_path = str(config_path)
             root = None
-        ctx = _chdir(root) if root is not None and root.is_dir() else contextlib.nullcontext()
-        with ctx:
-            self._matcher = evacam_py.EvaCAMMatch(self.config_path)
+        # Directory the config's relative paths are anchored to, or None to use
+        # the current working directory (reused by the matcher and run() below).
+        self._chdir_root = root if root is not None and root.is_dir() else None
+        with self._config_cwd():
+            self._matcher = self._evacam_py.EvaCAMMatch(self.config_path)
         self.word_width = self._matcher.word_width()
+        # Static write/area costs from EvaCAM's full run model, computed lazily
+        # on first write (see _design_costs).
+        self._design_costs_cache: Optional[tuple] = None
+
+    def _config_cwd(self):
+        """CWD context anchoring the config's relative ``cell_file`` path."""
+        if self._chdir_root is not None:
+            return _chdir(self._chdir_root)
+        return contextlib.nullcontext()
+
+    def _design_costs(self) -> tuple:
+        """Static ``(write_dynamic_energy_J, write_latency_s, area_m2)``.
+
+        Obtained from EvaCAM's full ``run`` model, which evaluates the array
+        organization once. For a pinned design (the shipped match config fixes
+        the banks/mats and fits a single subarray) ``run`` returns a single
+        solution, so we take that one design and ignore EvaCAM's design-space
+        exploration. Cached after the first call.
+        """
+        if self._design_costs_cache is None:
+            with self._config_cwd():
+                result = self._evacam_py.run(self.config_path, threads=1)
+            design = next(iter(result.best_results.values()))
+            summary = design.summary
+            self._design_costs_cache = (
+                float(summary["energy.write_dynamic_j"]),
+                float(summary["timing.write_latency_s"]),
+                float(summary["area.total.area_m2"]),
+            )
+        return self._design_costs_cache
 
     @staticmethod
     def _to_binary(vec) -> list:
@@ -132,9 +164,17 @@ class EVACAMConfig:
         return bool(result.hit), float(result.search_dynamic_energy), float(result.search_latency)
 
     def write(self, data) -> tuple:
-        """Pass-through write.
+        """Write ``data`` and report EvaCAM's write cost.
 
-        EvaCAM's match app models the search path only, so no write-side
-        variation/cost is applied here. Returns ``(data, energy, latency)``.
+        Returns ``(data, write_dynamic_energy_J, write_latency_s)``. The cost is
+        a static property of the array organization (independent of the stored
+        data), taken from EvaCAM's full run model; ``data`` is passed through
+        unchanged. See :meth:`area` for the array area.
         """
-        return data, 0.0, 0.0
+        energy, latency, _area = self._design_costs()
+        return data, energy, latency
+
+    @property
+    def area(self) -> float:
+        """Total array area in m^2 from EvaCAM's full run model."""
+        return self._design_costs()[2]

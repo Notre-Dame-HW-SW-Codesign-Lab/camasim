@@ -35,9 +35,26 @@ def test_wrong_length_raises(evacam_config):
         evacam_config.match(row, short)
 
 
-def test_write_is_passthrough(evacam_config):
+def test_write_passes_data_through_with_costs(evacam_config):
     data = np.ones((4, evacam_config.word_width))
     out, energy, latency = evacam_config.write(data)
+    # Data is unchanged; write cost and area come from EvaCAM's run model.
     assert np.array_equal(out, data)
-    assert energy == 0.0
-    assert latency == 0.0
+    assert energy > 0
+    assert latency > 0
+    assert evacam_config.area > 0
+
+
+@pytest.mark.xfail(
+    reason="EvaCAM write energy uses a fixed 50/50 ones/zeros activity factor; "
+    "make it data-dependent. When this xpasses, the write model became data-aware.",
+    strict=True,
+)
+def test_write_cost_is_data_dependent(evacam_config):
+    # Different data should cost different write energy once the model is
+    # data-aware. Today it does not, so this is an expected failure (xfail);
+    # the strict mark turns an xpass into a CI failure so we notice the change.
+    w = evacam_config.word_width
+    _, energy_zeros, _ = evacam_config.write(np.zeros((4, w)))
+    _, energy_ones, _ = evacam_config.write(np.ones((4, w)))
+    assert energy_ones != energy_zeros
